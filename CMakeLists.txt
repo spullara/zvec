@@ -31,7 +31,7 @@ message(STATUS "BUILD_TOOLS:${BUILD_TOOLS}")
 cc_directory(thirdparty)
 cc_directories(src)
 
-if(NOT CMAKE_SYSTEM_NAME STREQUAL "iOS")
+if(NOT CMAKE_SYSTEM_NAME STREQUAL "iOS" AND NOT ZVEC_CROSS_COMPILE)
     cc_directories(tests)
     if(BUILD_TOOLS)
         cc_directories(tools)
