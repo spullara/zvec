@@ -13,6 +13,8 @@ file(MAKE_DIRECTORY ${EXTERNAL_INC_DIR})
 file(MAKE_DIRECTORY ${EXTERNAL_LIB_DIR})
 
 add_subdirectory(googletest googletest EXCLUDE_FROM_ALL)
+# Force gflags to export static libs so glog's export set can find them (CMake 4.x strictness)
+set(GFLAGS_INSTALL_STATIC_LIBS ON CACHE BOOL "" FORCE)
 add_subdirectory(gflags gflags EXCLUDE_FROM_ALL)
 add_subdirectory(glog glog EXCLUDE_FROM_ALL)
 add_subdirectory(sparsehash sparsehash EXCLUDE_FROM_ALL)

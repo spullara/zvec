@@ -334,10 +334,12 @@ endif()
 
 # RPATH settings
 set(CMAKE_MACOSX_RPATH ON)
-if(NOT ${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
+if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
+  # iOS uses static libraries; no RPATH needed
+elseif(NOT ${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
   set(CMAKE_SKIP_BUILD_RPATH ON)
   set(CMAKE_BUILD_WITH_INSTALL_RPATH ON)
-  if(${CMAKE_SIZEOF_VOID_P} EQUAL "8")
+  if(CMAKE_SIZEOF_VOID_P EQUAL "8")
     set(CMAKE_INSTALL_RPATH "$ORIGIN/../lib64:$ORIGIN/../lib:$ORIGIN")
   else()
     set(CMAKE_INSTALL_RPATH "$ORIGIN/../lib:$ORIGIN")
