@@ -4,12 +4,26 @@ file(MAKE_DIRECTORY ${lz4_INCLUDE_DIR})
 file(MAKE_DIRECTORY ${lz4_LIBRARY_DIR})
 
 include(ExternalProject)
+
+# For cross-compilation, pass the right compiler and flags to lz4's Makefile
+set(LZ4_CC_ENV "CC=${CMAKE_C_COMPILER}")
+set(LZ4_CFLAGS "-fPIC")
+if(CMAKE_OSX_SYSROOT)
+    set(LZ4_CFLAGS "${LZ4_CFLAGS} -isysroot ${CMAKE_OSX_SYSROOT}")
+endif()
+if(CMAKE_OSX_ARCHITECTURES)
+    set(LZ4_CFLAGS "${LZ4_CFLAGS} -arch ${CMAKE_OSX_ARCHITECTURES}")
+endif()
+if(CMAKE_OSX_DEPLOYMENT_TARGET AND CMAKE_SYSTEM_NAME STREQUAL "iOS")
+    set(LZ4_CFLAGS "${LZ4_CFLAGS} -mios-version-min=${CMAKE_OSX_DEPLOYMENT_TARGET}")
+endif()
+
 ExternalProject_Add(
         Lz4.BUILD
         PREFIX lz4
     URL "${CMAKE_CURRENT_SOURCE_DIR}/lz4-1.9.4"
     CONFIGURE_COMMAND ""
-    BUILD_COMMAND env CFLAGS=-fPIC BUILD_SHARED=no make -j
+    BUILD_COMMAND env ${LZ4_CC_ENV} "CFLAGS=${LZ4_CFLAGS}" BUILD_SHARED=no make -j
     INSTALL_COMMAND make DESTDIR=${EXTERNAL_BINARY_DIR} BUILD_SHARED=no install
     BUILD_IN_SOURCE ON
     LOG_DOWNLOAD ON

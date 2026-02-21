@@ -301,7 +301,7 @@
 ##      )
 ##
 
-cmake_minimum_required(VERSION 3.1 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.5 FATAL_ERROR)
 include(CMakeParseArguments)
 
 # Using AppleClang instead of Clang (Compiler id)
@@ -652,10 +652,10 @@ function(_target_link_libraries _NAME)
     endif()
 
     if(NOT MSVC)
-      if(NOT ${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
-        list(APPEND LINK_LIBS -Wl,--whole-archive ${LIB} -Wl,--no-whole-archive)
-      else()
+      if(APPLE OR CMAKE_SYSTEM_NAME STREQUAL "iOS")
         list(APPEND LINK_LIBS -Wl,-force_load ${LIB})
+      else()
+        list(APPEND LINK_LIBS -Wl,--whole-archive ${LIB} -Wl,--no-whole-archive)
       endif()
     else()
       # Microsoft Visual C++
@@ -1246,6 +1246,32 @@ endfunction()
 ## Find protobuf library
 function(_find_protobuf _VERSION)
   if(DEFINED CC_PROTOBUF_PROTOC_${_VERSION})
+    return()
+  endif()
+
+  # Cross-compilation path: libprotobuf target exists but protoc doesn't
+  if(NOT TARGET protoc AND TARGET libprotobuf)
+    if(NOT PROTOBUF_HOST_PROTOC)
+      message(FATAL_ERROR
+        "Cross-compiling: protoc target not available. "
+        "Set PROTOBUF_HOST_PROTOC to a native protoc binary.")
+    endif()
+    get_target_property(libprotobuf_VERSION libprotobuf VERSION)
+    message(STATUS "Cross-compile: using host protoc: ${PROTOBUF_HOST_PROTOC}")
+    message(STATUS "Found library 'libprotobuf ${libprotobuf_VERSION}'")
+    set(
+        CC_PROTOBUF_PROTOC_${_VERSION}
+        "${PROTOBUF_HOST_PROTOC}" CACHE PATH "Protobuf compiler"
+      )
+    get_target_property(libprotobuf_SOURCE_DIR libprotobuf SOURCE_DIR)
+    get_filename_component(libprotobuf_INCLUDE_DIR ${libprotobuf_SOURCE_DIR}/../src ABSOLUTE)
+    set(
+        CC_PROTOBUF_INCS_${_VERSION}
+        "${libprotobuf_INCLUDE_DIR}" CACHE STRING "Protobuf includes"
+      )
+    set(
+        CC_PROTOBUF_LIBS_${_VERSION} libprotobuf CACHE STRING "Protobuf libraries"
+      )
     return()
   endif()
 

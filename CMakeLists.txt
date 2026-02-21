@@ -30,10 +30,12 @@ message(STATUS "BUILD_TOOLS:${BUILD_TOOLS}")
 
 cc_directory(thirdparty)
 cc_directories(src)
-cc_directories(tests)
 
-if(BUILD_TOOLS)
-    cc_directories(tools)
+if(NOT CMAKE_SYSTEM_NAME STREQUAL "iOS")
+    cc_directories(tests)
+    if(BUILD_TOOLS)
+        cc_directories(tools)
+    endif()
 endif()
 
 git_version(GIT_SRCS_VER ${PROJECT_ROOT_DIR})
