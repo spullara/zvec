@@ -1,8 +1,22 @@
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index 62ebbcc..e17f67e 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
-@@ -17,7 +17,7 @@ set (CPACK_PACKAGE_VERSION_MINOR ${PROJECT_VERSION_MINOR})
+@@ -1,4 +1,4 @@
+-cmake_minimum_required (VERSION 3.0)
++cmake_minimum_required (VERSION 3.5)
+ 
+ if (POLICY CMP0042)
+   cmake_policy (SET CMP0042 NEW)
+@@ -8,7 +8,7 @@
+   cmake_policy (SET CMP0063 NEW)
+ endif (POLICY CMP0063)
+ 
+-project(glog VERSION 0.5.0 LANGUAGES CXX)
++project(glog VERSION 0.5.0 LANGUAGES C CXX)
+ 
+ set (CPACK_PACKAGE_NAME glog)
+ set (CPACK_PACKAGE_DESCRIPTION_SUMMARY "Google logging library")
+@@ -17,7 +17,7 @@
  set (CPACK_PACKAGE_VERSION_PATCH ${PROJECT_VERSION_PATCH})
  set (CPACK_PACKAGE_VERSION ${PROJECT_VERSION})
  
@@ -11,7 +25,7 @@ index 62ebbcc..e17f67e 100644
  option (PRINT_UNSYMBOLIZED_STACK_TRACES
    "Print file offsets in traces instead of symbolizing" OFF)
  option (WITH_CUSTOM_PREFIX "Enable support for user-generated message prefixes" OFF)
-@@ -802,12 +802,12 @@ if (BUILD_TESTING)
+@@ -802,12 +802,12 @@
      FIXTURES_REQUIRED "cmake_package_config;cmake_package_config_working")
  endif (BUILD_TESTING)
  
@@ -30,7 +44,7 @@ index 62ebbcc..e17f67e 100644
  
  if (WITH_PKGCONFIG)
    install (
-@@ -840,8 +840,8 @@ write_basic_package_version_file (
+@@ -840,8 +840,8 @@
    ${CMAKE_CURRENT_BINARY_DIR}/glog-config-version.cmake
    COMPATIBILITY SameMajorVersion)
  
@@ -41,7 +55,7 @@ index 62ebbcc..e17f67e 100644
  
  get_filename_component (_PREFIX "${CMAKE_INSTALL_PREFIX}" ABSOLUTE)
  
-@@ -885,5 +885,5 @@ install (DIRECTORY ${_glog_BINARY_CMake_DATADIR}
+@@ -885,5 +885,5 @@
    FILES_MATCHING PATTERN "*.cmake"
  )
  
