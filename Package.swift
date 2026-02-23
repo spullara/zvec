@@ -10,7 +10,8 @@ let package = Package(
     targets: [
         .binaryTarget(
             name: "zvec",
-            path: "build-xcframework/zvec.xcframework"
+            url: "https://github.com/spullara/zvec/releases/download/v0.1.0-ios/zvec.xcframework.zip",
+            checksum: "2934d9e5aa5f9c9abab46897685922ca75cb990ddbc21c97965ebebe5e2b9305"
         ),
         .target(
             name: "CZvec",
@@ -23,7 +24,7 @@ let package = Package(
             ],
             linkerSettings: [
                 .linkedLibrary("c++"),
-                .unsafeFlags(["-Xlinker", "-ObjC"]),
+                .unsafeFlags(["-Xlinker", "-all_load"]),
             ]
         ),
         .target(
