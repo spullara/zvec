@@ -15,7 +15,20 @@ if(CMAKE_OSX_ARCHITECTURES)
     set(LZ4_CFLAGS "${LZ4_CFLAGS} -arch ${CMAKE_OSX_ARCHITECTURES}")
 endif()
 if(CMAKE_OSX_DEPLOYMENT_TARGET AND CMAKE_SYSTEM_NAME STREQUAL "iOS")
-    set(LZ4_CFLAGS "${LZ4_CFLAGS} -mios-version-min=${CMAKE_OSX_DEPLOYMENT_TARGET}")
+    # Detect simulator vs device vs Mac Catalyst based on SDK path
+    if(CMAKE_OSX_SYSROOT MATCHES "iPhoneSimulator")
+        set(LZ4_CFLAGS "${LZ4_CFLAGS} -mios-simulator-version-min=${CMAKE_OSX_DEPLOYMENT_TARGET}")
+    elseif(CMAKE_C_FLAGS MATCHES "-target.*macabi")
+        # Mac Catalyst: the -target flag is already in CMAKE_C_FLAGS, no extra min version needed
+    else()
+        set(LZ4_CFLAGS "${LZ4_CFLAGS} -mios-version-min=${CMAKE_OSX_DEPLOYMENT_TARGET}")
+    endif()
+endif()
+# Pass through compiler target (needed for Mac Catalyst)
+if(CMAKE_C_COMPILER_TARGET)
+    set(LZ4_CFLAGS "${LZ4_CFLAGS} --target=${CMAKE_C_COMPILER_TARGET}")
+elseif(CMAKE_C_FLAGS MATCHES "-target")
+    set(LZ4_CFLAGS "${LZ4_CFLAGS} ${CMAKE_C_FLAGS}")
 endif()
 
 ExternalProject_Add(

@@ -22,7 +22,8 @@ let package = Package(
                 .unsafeFlags(["-std=c++17"]),
             ],
             linkerSettings: [
-                .unsafeFlags(["-all_load"]),
+                .linkedLibrary("c++"),
+                .unsafeFlags(["-Xlinker", "-all_load"]),
             ]
         ),
         .target(
