@@ -23,7 +23,7 @@ let package = Package(
             ],
             linkerSettings: [
                 .linkedLibrary("c++"),
-                .unsafeFlags(["-Xlinker", "-all_load"]),
+                .unsafeFlags(["-Xlinker", "-ObjC"]),
             ]
         ),
         .target(
