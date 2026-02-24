@@ -162,6 +162,55 @@ final class ZvecTests: XCTestCase {
         XCTAssertEqual(title, "Persisted")
     }
 
+    // MARK: - Fetch non-existent PK tests
+
+    func testFetchNonExistentPK() throws {
+        let path = Self.tempDir + "/test_fetch_nonexistent"
+        let schema = CollectionSchema(name: "test")
+        try schema.addField("title", dataType: .string)
+        try schema.addVectorField("embedding", dataType: .vectorFP32, dimension: 4)
+
+        let collection = try Collection.createAndOpen(path: path, schema: schema)
+
+        // Insert one document
+        let doc = Doc(pk: "exists")
+        try doc.set("title", string: "I exist")
+        try doc.set("embedding", vector: [1.0, 0.0, 0.0, 0.0])
+        try collection.insert([doc])
+        try collection.flush()
+
+        // Fetch a PK that was never inserted — should return empty, NOT crash
+        let fetched = try collection.fetch(pks: ["nonexistent"])
+        XCTAssertEqual(fetched.count, 0, "Fetching a non-existent PK should return empty array")
+    }
+
+    func testFetchMixedExistentAndNonExistent() throws {
+        let path = Self.tempDir + "/test_fetch_mixed"
+        let schema = CollectionSchema(name: "test")
+        try schema.addField("title", dataType: .string)
+        try schema.addVectorField("embedding", dataType: .vectorFP32, dimension: 4)
+
+        let collection = try Collection.createAndOpen(path: path, schema: schema)
+
+        // Insert docs with pks "a", "b", "c"
+        for pk in ["a", "b", "c"] {
+            let doc = Doc(pk: pk)
+            try doc.set("title", string: "Doc \(pk)")
+            try doc.set("embedding", vector: [1.0, 0.0, 0.0, 0.0])
+            try collection.insert([doc])
+        }
+        try collection.flush()
+
+        // Fetch a mix of existing and non-existing PKs
+        let fetched = try collection.fetch(pks: ["a", "missing", "c"])
+        XCTAssertEqual(fetched.count, 2, "Should return only the 2 existing docs (a and c)")
+
+        let fetchedPKs = Set(fetched.map { $0.pk })
+        XCTAssertTrue(fetchedPKs.contains("a"), "Should contain doc 'a'")
+        XCTAssertTrue(fetchedPKs.contains("c"), "Should contain doc 'c'")
+        XCTAssertFalse(fetchedPKs.contains("missing"), "Should NOT contain 'missing'")
+    }
+
     // MARK: - Crash Reproduction Helpers
 
     func randomVector(dim: Int) -> [Float] {
@@ -685,6 +734,211 @@ final class ZvecTests: XCTestCase {
                     let fetched = try faces.fetch(pks: ["face-\(idx)"])
                     if let doc = fetched.first {
                         let _ = try doc.getString("identifier")
+                    }
+                }
+            } catch {
+                errorLock.lock()
+                errors["faces_fetch"] = error
+                errorLock.unlock()
+            }
+        }
+
+        group.wait()
+
+        for (thread, err) in errors {
+            XCTFail("\(thread) thread error: \(err)")
+        }
+    }
+
+    // MARK: - Test 12b: Concurrent upsert and fetch (serialized)
+
+    func testConcurrentUpsertAndFetchSerialized() throws {
+        let path = Self.tempDir + "/crash_concurrent_serialized"
+        let schema = try makeRememberWhenSchema()
+        let collection = try Collection.createAndOpen(path: path, schema: schema)
+
+        // Quick sanity: single upsert on main thread
+        let testDoc = try makeDoc(index: 9999, randomVec: randomVector(dim: 512))
+        try collection.upsert([testDoc])
+
+        let group = DispatchGroup()
+        var upsertError: Error?
+        var fetchError: Error?
+        let queue = DispatchQueue(label: "com.zvec.test.serialized")
+
+        // Thread 1: upserts 500 docs one at a time, serialized through queue
+        group.enter()
+        DispatchQueue.global(qos: .userInitiated).async { [self] in
+            defer { group.leave() }
+            do {
+                for i in 0..<500 {
+                    let doc = try self.makeDoc(index: i, randomVec: self.randomVector(dim: 512))
+                    queue.sync {
+                        do {
+                            try collection.upsert([doc])
+                        } catch {
+                            upsertError = error
+                        }
+                    }
+                    if upsertError != nil { return }
+                }
+            } catch {
+                upsertError = error
+            }
+        }
+
+        // Thread 2: repeatedly fetches random PKs, serialized through same queue
+        group.enter()
+        DispatchQueue.global(qos: .userInitiated).async {
+            defer { group.leave() }
+            for _ in 0..<500 {
+                let idx = Int.random(in: 0..<500)
+                queue.sync {
+                    do {
+                        let fetched = try collection.fetch(pks: ["doc-\(idx)"])
+                        // May or may not find the doc depending on timing
+                        if let doc = fetched.first {
+                            let _ = try doc.getString("date_taken")
+                            let _ = try doc.getInt64("is_favorite")
+                            let _ = try doc.getDouble("nsfw")
+                        }
+                    } catch {
+                        fetchError = error
+                    }
+                }
+                if fetchError != nil { return }
+            }
+        }
+
+        group.wait()
+
+        if let err = upsertError { XCTFail("Upsert thread error: \(err)") }
+        if let err = fetchError { XCTFail("Fetch thread error: \(err)") }
+    }
+
+    // MARK: - Test 13b: Concurrent two collections (serialized)
+
+    func testConcurrentTwoCollectionsSerialized() throws {
+        let imagesPath = Self.tempDir + "/crash_conc_images_serialized"
+        let facesPath = Self.tempDir + "/crash_conc_faces_serialized"
+
+        // Images collection: 512-dim
+        let imagesSchema = CollectionSchema(name: "images")
+        try imagesSchema
+            .addVectorField("embedding", dataType: .vectorFP32, dimension: 512, metric: .cosine)
+            .addField("date_taken", dataType: .string)
+            .addField("is_favorite", dataType: .int64)
+            .addField("nsfw", dataType: .float64)
+        let images = try Collection.createAndOpen(path: imagesPath, schema: imagesSchema)
+
+        // Faces collection: 2048-dim
+        let facesSchema = CollectionSchema(name: "faces")
+        try facesSchema
+            .addVectorField("face_embedding", dataType: .vectorFP32, dimension: 2048, metric: .cosine)
+            .addField("identifier", dataType: .string)
+        let faces = try Collection.createAndOpen(path: facesPath, schema: facesSchema)
+
+        let group = DispatchGroup()
+        var errors: [String: Error] = [:]
+        let errorLock = NSLock()
+        let imagesLock = NSLock()
+        let facesLock = NSLock()
+
+        // Thread 1: upserts to images collection
+        group.enter()
+        DispatchQueue.global(qos: .userInitiated).async { [self] in
+            defer { group.leave() }
+            do {
+                for i in 0..<500 {
+                    let doc = Doc(pk: "img-\(i)")
+                    try doc.set("embedding", vector: self.randomVector(dim: 512))
+                    try doc.set("date_taken", string: "2024-01-01")
+                    try doc.set("is_favorite", int64: 0)
+                    try doc.set("nsfw", double: 0.0)
+                    imagesLock.lock()
+                    do {
+                        try images.upsert([doc])
+                        imagesLock.unlock()
+                    } catch {
+                        imagesLock.unlock()
+                        throw error
+                    }
+                }
+            } catch {
+                errorLock.lock()
+                errors["images_upsert"] = error
+                errorLock.unlock()
+            }
+        }
+
+        // Thread 2: upserts to faces collection
+        group.enter()
+        DispatchQueue.global(qos: .userInitiated).async { [self] in
+            defer { group.leave() }
+            do {
+                for i in 0..<500 {
+                    let doc = Doc(pk: "face-\(i)")
+                    try doc.set("face_embedding", vector: self.randomVector(dim: 2048))
+                    try doc.set("identifier", string: "person-\(i)")
+                    facesLock.lock()
+                    do {
+                        try faces.upsert([doc])
+                        facesLock.unlock()
+                    } catch {
+                        facesLock.unlock()
+                        throw error
+                    }
+                }
+            } catch {
+                errorLock.lock()
+                errors["faces_upsert"] = error
+                errorLock.unlock()
+            }
+        }
+
+        // Thread 3: fetches from images
+        group.enter()
+        DispatchQueue.global(qos: .userInitiated).async { [self] in
+            defer { group.leave() }
+            do {
+                for _ in 0..<500 {
+                    let idx = Int.random(in: 0..<500)
+                    imagesLock.lock()
+                    do {
+                        let fetched = try images.fetch(pks: ["img-\(idx)"])
+                        if let doc = fetched.first {
+                            let _ = try doc.getString("date_taken")
+                        }
+                        imagesLock.unlock()
+                    } catch {
+                        imagesLock.unlock()
+                        throw error
+                    }
+                }
+            } catch {
+                errorLock.lock()
+                errors["images_fetch"] = error
+                errorLock.unlock()
+            }
+        }
+
+        // Thread 4: fetches from faces
+        group.enter()
+        DispatchQueue.global(qos: .userInitiated).async { [self] in
+            defer { group.leave() }
+            do {
+                for _ in 0..<500 {
+                    let idx = Int.random(in: 0..<500)
+                    facesLock.lock()
+                    do {
+                        let fetched = try faces.fetch(pks: ["face-\(idx)"])
+                        if let doc = fetched.first {
+                            let _ = try doc.getString("identifier")
+                        }
+                        facesLock.unlock()
+                    } catch {
+                        facesLock.unlock()
+                        throw error
                     }
                 }
             } catch {

@@ -374,6 +374,7 @@ zvec_status_t zvec_collection_query(zvec_collection_t col,
 
     *results = new zvec_doc_t[n];
     for (int i = 0; i < n; i++) {
+        if (!doc_list[i]) continue;  // defensive: skip null entries
         auto d = new zvec_doc_s();
         d->doc = *doc_list[i];
         (*results)[i] = d;
@@ -400,7 +401,11 @@ zvec_status_t zvec_collection_fetch(zvec_collection_t col,
     if (!result.has_value()) return from_cpp_status(result.error());
 
     auto& doc_map = result.value();
-    int n = static_cast<int>(doc_map.size());
+    // Count only non-null results (null = not found or deleted)
+    int n = 0;
+    for (auto& [pk, doc_ptr] : doc_map) {
+        if (doc_ptr) n++;
+    }
     *result_count = n;
     if (n == 0) {
         *results = nullptr;
@@ -410,6 +415,7 @@ zvec_status_t zvec_collection_fetch(zvec_collection_t col,
     *results = new zvec_doc_t[n];
     int idx = 0;
     for (auto& [pk, doc_ptr] : doc_map) {
+        if (!doc_ptr) continue;
         auto d = new zvec_doc_s();
         d->doc = *doc_ptr;
         (*results)[idx++] = d;
