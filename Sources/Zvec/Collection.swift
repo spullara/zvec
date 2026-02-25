@@ -48,6 +48,12 @@ public class Collection {
         try ZvecError.check(zvec_collection_flush(handle))
     }
 
+    /// Compact segment files on disk by merging small segments into larger ones.
+    /// Call after bulk writes to reduce file descriptor usage.
+    public func optimize() throws {
+        try ZvecError.check(zvec_collection_optimize(handle))
+    }
+
     /// Get the number of documents in the collection
     public func docCount() throws -> UInt64 {
         var count: UInt64 = 0

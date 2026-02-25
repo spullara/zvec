@@ -157,6 +157,12 @@ zvec_status_t zvec_collection_flush(zvec_collection_t col) {
     return from_cpp_status(st);
 }
 
+zvec_status_t zvec_collection_optimize(zvec_collection_t col) {
+    if (!col) return make_status(ZVEC_STATUS_INVALID_ARGUMENT, "null collection");
+    auto st = col->collection->Optimize();
+    return from_cpp_status(st);
+}
+
 zvec_status_t zvec_collection_doc_count(zvec_collection_t col, uint64_t* out) {
     if (!col || !out) return make_status(ZVEC_STATUS_INVALID_ARGUMENT, "null argument");
     auto result = col->collection->Stats();

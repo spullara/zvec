@@ -93,6 +93,7 @@ zvec_status_t zvec_collection_open(const char* path, bool read_only,
                                     zvec_collection_t* out);
 void zvec_collection_destroy(zvec_collection_t col);
 zvec_status_t zvec_collection_flush(zvec_collection_t col);
+zvec_status_t zvec_collection_optimize(zvec_collection_t col);
 zvec_status_t zvec_collection_doc_count(zvec_collection_t col, uint64_t* out);
 
 // --- Doc ---
