@@ -80,6 +80,20 @@ public class Doc {
         return self
     }
 
+    /// Set a UInt32 field value
+    @discardableResult
+    public func set(_ field: String, uint32 value: UInt32) throws -> Doc {
+        try ZvecError.check(zvec_doc_set_uint32(handle, field, value))
+        return self
+    }
+
+    /// Set a UInt64 field value
+    @discardableResult
+    public func set(_ field: String, uint64 value: UInt64) throws -> Doc {
+        try ZvecError.check(zvec_doc_set_uint64(handle, field, value))
+        return self
+    }
+
     /// Set a vector (float array) field value
     @discardableResult
     public func set(_ field: String, vector value: [Float]) throws -> Doc {
@@ -113,10 +127,38 @@ public class Doc {
         return value
     }
 
+    /// Get an Int32 field value
+    public func getInt32(_ field: String) throws -> Int32 {
+        var value: Int32 = 0
+        try ZvecError.check(zvec_doc_get_int32(handle, field, &value))
+        return value
+    }
+
+    /// Get a UInt32 field value
+    public func getUInt32(_ field: String) throws -> UInt32 {
+        var value: UInt32 = 0
+        try ZvecError.check(zvec_doc_get_uint32(handle, field, &value))
+        return value
+    }
+
+    /// Get a UInt64 field value
+    public func getUInt64(_ field: String) throws -> UInt64 {
+        var value: UInt64 = 0
+        try ZvecError.check(zvec_doc_get_uint64(handle, field, &value))
+        return value
+    }
+
     /// Get a Double field value
     public func getDouble(_ field: String) throws -> Double {
         var value: Double = 0
         try ZvecError.check(zvec_doc_get_double(handle, field, &value))
+        return value
+    }
+
+    /// Get a Bool field value
+    public func getBool(_ field: String) throws -> Bool {
+        var value = false
+        try ZvecError.check(zvec_doc_get_bool(handle, field, &value))
         return value
     }
 
