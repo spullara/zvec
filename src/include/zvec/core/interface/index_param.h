@@ -15,6 +15,7 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
@@ -45,6 +46,7 @@ struct StorageOptions {
 struct MergeOptions {
   uint32_t write_concurrency = 1;
   ailego::ThreadPool *pool = nullptr;
+  std::function<void(uint32_t, uint32_t)> progress_callback;
 };
 
 using IndexMeta = core::IndexMeta;

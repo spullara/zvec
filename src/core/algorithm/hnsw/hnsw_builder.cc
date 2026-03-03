@@ -303,16 +303,22 @@ int HnswBuilder::build(IndexThreads::Pointer threads,
                                              threads->count(), &finished));
   }
 
+  const uint32_t wait_secs =
+      progress_callback_ ? 1U : check_interval_secs_;
   while (!task_group->is_finished()) {
     std::unique_lock<std::mutex> lk(mutex_);
     cond_.wait_until(lk, std::chrono::system_clock::now() +
-                             std::chrono::seconds(check_interval_secs_));
+                             std::chrono::seconds(wait_secs));
     if (error_.load(std::memory_order_acquire)) {
       LOG_ERROR("Failed to build index while waiting finish");
       return errcode_;
     }
     LOG_INFO("Built cnt %u, finished percent %.3f%%", finished.load(),
              finished.load() * 100.0f / entity_.doc_cnt());
+    if (progress_callback_) {
+      progress_callback_(finished.load(),
+                         static_cast<uint32_t>(entity_.doc_cnt()));
+    }
   }
   if (error_.load(std::memory_order_acquire)) {
     LOG_ERROR("Failed to build index while waiting finish");

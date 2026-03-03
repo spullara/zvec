@@ -13,6 +13,7 @@
 // limitations under the License.
 #pragma once
 
+#include <functional>
 #include <zvec/core/framework/index_helper.h>
 #include <zvec/core/framework/index_holder.h>
 #include <zvec/core/framework/index_meta.h>
@@ -25,8 +26,16 @@ class IndexBuilder : public IndexRunner {
  public:
   typedef std::shared_ptr<IndexBuilder> Pointer;
 
+  //! Progress callback type: (current_count, total_count)
+  using ProgressCallback = std::function<void(uint32_t, uint32_t)>;
+
   //! Destructor
   virtual ~IndexBuilder(void) {}
+
+  //! Set progress callback for build operations
+  void set_progress_callback(ProgressCallback callback) {
+    progress_callback_ = std::move(callback);
+  }
 
   //! Initialize the builder
   virtual int init(const IndexMeta & /*meta*/,
@@ -55,6 +64,8 @@ class IndexBuilder : public IndexRunner {
     }
     return ret;
   }
+ protected:
+  ProgressCallback progress_callback_;
 };
 
 }  // namespace core

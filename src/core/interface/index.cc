@@ -775,6 +775,9 @@ int Index::Merge(const std::vector<Index::Pointer> &indexes,
     LOG_ERROR("Failed to set target streamer");
     return core::IndexError_Runtime;
   }
+  if (options.progress_callback && builder_) {
+    builder_->set_progress_callback(options.progress_callback);
+  }
 
   for (const auto &index : indexes) {
     if (reducer->feed_streamer_with_reformer(index->streamer_,
