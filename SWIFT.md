@@ -330,6 +330,32 @@ try collection.dropIndex(fieldName: "embedding")
 try collection.createHnswIndex(fieldName: "embedding", metric: .cosine, m: 32, efConstruction: 200)
 ```
 
+### Deleting by Filter
+
+```swift
+public func deleteByFilter(_ filter: String) throws
+```
+
+Delete all documents matching a SQL-like filter expression.
+
+```swift
+try collection.deleteByFilter("age > 30")
+try collection.flush()
+```
+
+### Destroying a Collection
+
+```swift
+public func destroyData() throws
+```
+
+Permanently delete the collection's data files from disk. **This is irreversible.** After calling this, the collection object is no longer usable.
+
+```swift
+// WARNING: permanently deletes all data on disk
+try collection.destroyData()
+```
+
 ### Collection Lifecycle
 
 A `Collection` is automatically closed and its resources freed when the object is deallocated (via `deinit`). You do not need to call a close method. Hold a strong reference to the `Collection` for as long as you need it.
@@ -365,6 +391,8 @@ try doc.set("timestamp", int64: Int64(1700000000))
 try doc.set("rating", float: Float(4.5))
 try doc.set("latitude", double: 37.7749)
 try doc.set("is_favorite", bool: true)
+try doc.set("ref_count", uint32: UInt32(5))
+try doc.set("file_size", uint64: UInt64(1048576))
 try doc.set("embedding", vector: [0.1, 0.2, 0.3, ...])  // [Float]
 ```
 
@@ -385,9 +413,13 @@ All getters throw `ZvecError` (e.g., `.notFound` if the field doesn't exist).
 
 ```swift
 let name: String   = try doc.getString("name")
+let count: Int32   = try doc.getInt32("count")
 let ts: Int64      = try doc.getInt64("timestamp")
+let refs: UInt32   = try doc.getUInt32("ref_count")
+let size: UInt64   = try doc.getUInt64("file_size")
 let rating: Float  = try doc.getFloat("rating")
 let lat: Double    = try doc.getDouble("latitude")
+let fav: Bool      = try doc.getBool("is_favorite")
 let vec: [Float]   = try doc.getVectorFloat("embedding")
 ```
 
@@ -401,14 +433,20 @@ let vec: [Float]   = try doc.getVectorFloat("embedding")
 | `set(_:float:)` | `float` | `Float` |
 | `set(_:double:)` | `double` | `Double` |
 | `set(_:bool:)` | `bool` | `Bool` |
+| `set(_:uint32:)` | `uint32` | `UInt32` |
+| `set(_:uint64:)` | `uint64` | `UInt64` |
 | `set(_:vector:)` | `vector` | `[Float]` |
 
 | Getter | Return Type |
 |--------|-------------|
 | `getString(_:)` | `String` |
+| `getInt32(_:)` | `Int32` |
 | `getInt64(_:)` | `Int64` |
+| `getUInt32(_:)` | `UInt32` |
+| `getUInt64(_:)` | `UInt64` |
 | `getFloat(_:)` | `Float` |
 | `getDouble(_:)` | `Double` |
+| `getBool(_:)` | `Bool` |
 | `getVectorFloat(_:)` | `[Float]` |
 
 ---
