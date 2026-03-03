@@ -443,6 +443,24 @@ zvec_status_t zvec_collection_create_hnsw_index(zvec_collection_t col,
     return from_cpp_status(st);
 }
 
+zvec_status_t zvec_collection_create_hnsw_index_with_progress(
+    zvec_collection_t col, const char* field_name,
+    zvec_metric_type_t metric, int m, int ef_construction,
+    zvec_progress_callback_t progress, void* user_data) {
+    if (!col || !field_name)
+        return make_status(ZVEC_STATUS_INVALID_ARGUMENT, "null argument");
+    auto params = std::make_shared<zvec::HnswIndexParams>(
+        to_cpp_metric_type(metric), m, ef_construction);
+    zvec::CreateIndexOptions options;
+    if (progress) {
+        options.progress_callback_ = [progress, user_data](uint32_t current, uint32_t total) {
+            progress(current, total, user_data);
+        };
+    }
+    auto st = col->collection->CreateIndex(field_name, params, options);
+    return from_cpp_status(st);
+}
+
 zvec_status_t zvec_collection_create_flat_index(zvec_collection_t col,
                                                  const char* field_name,
                                                  zvec_metric_type_t metric) {

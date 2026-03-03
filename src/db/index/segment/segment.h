@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <functional>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -81,7 +82,8 @@ class Segment {
       std::unordered_map<std::string, VectorColumnIndexer::Ptr>
           *vector_indexers,
       std::unordered_map<std::string, VectorColumnIndexer::Ptr>
-          *quant_vector_indexers) = 0;
+          *quant_vector_indexers,
+      const std::function<void(uint32_t, uint32_t)> &progress_callback = nullptr) = 0;
 
   // defined in segment.h cause it needs to access block_id generator
   virtual Status create_vector_index(
@@ -90,7 +92,8 @@ class Segment {
       std::unordered_map<std::string, VectorColumnIndexer::Ptr>
           *vector_indexers,
       std::unordered_map<std::string, VectorColumnIndexer::Ptr>
-          *quant_vector_indexers) = 0;
+          *quant_vector_indexers,
+      const std::function<void(uint32_t, uint32_t)> &progress_callback = nullptr) = 0;
 
   virtual Status drop_vector_index(
       const std::string &column, SegmentMeta::Ptr *new_segmnet_meta,

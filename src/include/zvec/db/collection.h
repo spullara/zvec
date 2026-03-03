@@ -67,7 +67,7 @@ class Collection {
  public:
   virtual Status CreateIndex(
       const std::string &column_name, const IndexParams::Ptr &index_params,
-      const CreateIndexOptions &options = CreateIndexOptions{0}) = 0;
+      const CreateIndexOptions &options = CreateIndexOptions{}) = 0;
 
   virtual Status DropIndex(const std::string &column_name) = 0;
 

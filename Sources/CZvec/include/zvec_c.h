@@ -145,6 +145,16 @@ zvec_status_t zvec_collection_create_hnsw_index(zvec_collection_t col,
                                                  const char* field_name,
                                                  zvec_metric_type_t metric,
                                                  int m, int ef_construction);
+
+/// Progress callback type: (current_count, total_count, user_data)
+typedef void (*zvec_progress_callback_t)(uint32_t current, uint32_t total, void* user_data);
+
+/// Create an HNSW index with a progress callback
+zvec_status_t zvec_collection_create_hnsw_index_with_progress(
+    zvec_collection_t col, const char* field_name,
+    zvec_metric_type_t metric, int m, int ef_construction,
+    zvec_progress_callback_t progress, void* user_data);
+
 zvec_status_t zvec_collection_create_flat_index(zvec_collection_t col,
                                                  const char* field_name,
                                                  zvec_metric_type_t metric);

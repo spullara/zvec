@@ -799,12 +799,14 @@ Status SegmentHelper::ExecuteCreateVectorIndexTask(
   if (task.column_to_build_vector_index_ == "") {
     return task.input_segment_->create_all_vector_index(
         task.concurrency_, &task.output_segment_meta_,
-        &task.output_vector_indexers_, &task.output_quant_vector_indexers_);
+        &task.output_vector_indexers_, &task.output_quant_vector_indexers_,
+        task.progress_callback_);
   } else {
     return task.input_segment_->create_vector_index(
         task.column_to_build_vector_index_, task.index_params_,
         task.concurrency_, &task.output_segment_meta_,
-        &task.output_vector_indexers_, &task.output_quant_vector_indexers_);
+        &task.output_vector_indexers_, &task.output_quant_vector_indexers_,
+        task.progress_callback_);
   }
 }
 

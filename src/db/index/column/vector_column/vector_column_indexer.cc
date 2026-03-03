@@ -125,9 +125,12 @@ Status VectorColumnIndexer::Merge(
   if (engine_filter == nullptr) {
     return Status::InvalidArgument("Failed to convert filter");
   }
+  core_interface::MergeOptions engine_merge_options;
+  engine_merge_options.write_concurrency = merge_options.write_concurrency;
+  engine_merge_options.pool = merge_options.pool;
+  engine_merge_options.progress_callback = merge_options.progress_callback;
   if (0 !=
-      index->Merge(engine_indexers, *engine_filter,
-                   {merge_options.write_concurrency, merge_options.pool})) {
+      index->Merge(engine_indexers, *engine_filter, engine_merge_options)) {
     return Status::InternalError("Failed to merge index");
   }
   return Status::OK();

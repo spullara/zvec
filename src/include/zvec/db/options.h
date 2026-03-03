@@ -14,6 +14,7 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 
 namespace zvec {
 
@@ -52,6 +53,7 @@ struct SegmentOptions {
 
 struct CreateIndexOptions {
   int concurrency_{0};  // default use config.optimize_thread_pool
+  std::function<void(uint32_t, uint32_t)> progress_callback_;
 };
 
 struct OptimizeOptions {

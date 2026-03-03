@@ -173,7 +173,8 @@ class CollectionImpl : public Collection {
 
   std::vector<SegmentTask::Ptr> build_create_vector_index_task(
       const std::vector<Segment::Ptr> &segments, const std::string &column,
-      const IndexParams::Ptr &index_params, int concurrency);
+      const IndexParams::Ptr &index_params, int concurrency,
+      const std::function<void(uint32_t, uint32_t)> &progress_callback = nullptr);
 
   std::vector<SegmentTask::Ptr> build_create_scalar_index_task(
       const std::vector<Segment::Ptr> &segments, const std::string &column,
@@ -508,7 +509,8 @@ Status CollectionImpl::CreateIndex(const std::string &column_name,
   std::vector<SegmentTask::Ptr> tasks;
   if (is_vector_field) {
     tasks = build_create_vector_index_task(persist_segments, column_name,
-                                           index_params, options.concurrency_);
+                                           index_params, options.concurrency_,
+                                           options.progress_callback_);
 
   } else {
     tasks = build_create_scalar_index_task(persist_segments, column_name,
@@ -583,12 +585,14 @@ Status CollectionImpl::CreateIndex(const std::string &column_name,
 
 std::vector<SegmentTask::Ptr> CollectionImpl::build_create_vector_index_task(
     const std::vector<Segment::Ptr> &segments, const std::string &column,
-    const IndexParams::Ptr &index_params, int concurrency) {
+    const IndexParams::Ptr &index_params, int concurrency,
+    const std::function<void(uint32_t, uint32_t)> &progress_callback) {
   std::vector<SegmentTask::Ptr> tasks;
   for (auto &segment : segments) {
     if (!segment->vector_index_ready(column, index_params)) {
       tasks.push_back(SegmentTask::CreateCreateVectorIndexTask(
-          CreateVectorIndexTask{segment, column, index_params, concurrency}));
+          CreateVectorIndexTask{segment, column, index_params, concurrency,
+                                progress_callback}));
     }
   }
   return tasks;

@@ -154,7 +154,8 @@ class SegmentImpl : public Segment,
       std::unordered_map<std::string, VectorColumnIndexer::Ptr>
           *vector_indexers,
       std::unordered_map<std::string, VectorColumnIndexer::Ptr>
-          *quant_vector_indexers) override;
+          *quant_vector_indexers,
+      const std::function<void(uint32_t, uint32_t)> &progress_callback = nullptr) override;
 
   Status create_vector_index(
       const std::string &column, const IndexParams::Ptr &index_params,
@@ -162,7 +163,8 @@ class SegmentImpl : public Segment,
       std::unordered_map<std::string, VectorColumnIndexer::Ptr>
           *vector_indexers,
       std::unordered_map<std::string, VectorColumnIndexer::Ptr>
-          *quant_vector_indexers) override;
+          *quant_vector_indexers,
+      const std::function<void(uint32_t, uint32_t)> &progress_callback = nullptr) override;
 
   Status drop_vector_index(
       const std::string &column, SegmentMeta::Ptr *new_segment_meta,
@@ -252,7 +254,8 @@ class SegmentImpl : public Segment,
 
   Result<VectorColumnIndexer::Ptr> merge_vector_indexer(
       const std::string &index_file_path, const std::string &column,
-      const FieldSchema &field, int concurrency);
+      const FieldSchema &field, int concurrency,
+      const std::function<void(uint32_t, uint32_t)> &progress_callback = nullptr);
 
   // Helper functions for Insert/Update/Upsert/Delete
   template <typename ValueType>
@@ -1539,7 +1542,8 @@ Status SegmentImpl::create_all_vector_index(
     int concurrency, SegmentMeta::Ptr *segment_meta,
     std::unordered_map<std::string, VectorColumnIndexer::Ptr> *vector_indexers,
     std::unordered_map<std::string, VectorColumnIndexer::Ptr>
-        *quant_vector_indexers) {
+        *quant_vector_indexers,
+    const std::function<void(uint32_t, uint32_t)> &progress_callback) {
   const auto &vector_fields = collection_schema_->vector_fields();
 
   auto new_segment_meta = std::make_shared<SegmentMeta>(*segment_meta_);
@@ -1549,7 +1553,8 @@ Status SegmentImpl::create_all_vector_index(
   for (const auto &field : vector_fields) {
     auto s = create_vector_index(field->name(), field->index_params(),
                                  concurrency, &new_segment_meta,
-                                 vector_indexers, quant_vector_indexers);
+                                 vector_indexers, quant_vector_indexers,
+                                 progress_callback);
     CHECK_RETURN_STATUS(s);
     vector_field_names.insert(field->name());
   }
@@ -1562,7 +1567,8 @@ Status SegmentImpl::create_all_vector_index(
 
 Result<VectorColumnIndexer::Ptr> SegmentImpl::merge_vector_indexer(
     const std::string &index_file_path, const std::string &column,
-    const FieldSchema &field, int concurrency) {
+    const FieldSchema &field, int concurrency,
+    const std::function<void(uint32_t, uint32_t)> &progress_callback) {
   VectorColumnIndexer::Ptr vector_indexer =
       std::make_shared<VectorColumnIndexer>(index_file_path, field);
 
@@ -1580,6 +1586,7 @@ Result<VectorColumnIndexer::Ptr> SegmentImpl::merge_vector_indexer(
   } else {
     merge_options.write_concurrency = concurrency;
   }
+  merge_options.progress_callback = progress_callback;
   s = vector_indexer->Merge(to_merge_indexers, filter_, merge_options);
   CHECK_RETURN_STATUS_EXPECTED(s);
   s = vector_indexer->Flush();
@@ -1593,7 +1600,8 @@ Status SegmentImpl::create_vector_index(
     int concurrency, SegmentMeta::Ptr *segment_meta,
     std::unordered_map<std::string, VectorColumnIndexer::Ptr> *vector_indexers,
     std::unordered_map<std::string, VectorColumnIndexer::Ptr>
-        *quant_vector_indexers) {
+        *quant_vector_indexers,
+    const std::function<void(uint32_t, uint32_t)> &progress_callback) {
   auto field = collection_schema_->get_vector_field(column);
   SegmentMeta::Ptr new_segment_meta;
   if (*segment_meta == nullptr) {
@@ -1623,7 +1631,8 @@ Status SegmentImpl::create_vector_index(
     std::string index_file_path = FileHelper::MakeVectorIndexPath(
         path_, column, segment_meta_->id(), block_id);
     auto vector_indexer = merge_vector_indexer(
-        index_file_path, column, *field_with_new_index_params, concurrency);
+        index_file_path, column, *field_with_new_index_params, concurrency,
+        progress_callback);
     if (!vector_indexer.has_value()) {
       return vector_indexer.error();
     }
@@ -1658,7 +1667,8 @@ Status SegmentImpl::create_vector_index(
       std::string index_file_path = FileHelper::MakeVectorIndexPath(
           path_, column, segment_meta_->id(), block_id);
       auto vector_indexer = merge_vector_indexer(index_file_path, column,
-                                                 *field_with_flat, concurrency);
+                                                 *field_with_flat, concurrency,
+                                                 progress_callback);
       if (!vector_indexer.has_value()) {
         return vector_indexer.error();
       }
@@ -1683,7 +1693,8 @@ Status SegmentImpl::create_vector_index(
     std::string index_file_path = FileHelper::MakeQuantizeVectorIndexPath(
         path_, column, segment_meta_->id(), quant_block_id);
     auto vector_indexer = merge_vector_indexer(
-        index_file_path, column, *field_with_new_index_params, concurrency);
+        index_file_path, column, *field_with_new_index_params, concurrency,
+        progress_callback);
     if (!vector_indexer.has_value()) {
       return vector_indexer.error();
     }

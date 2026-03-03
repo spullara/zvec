@@ -59,17 +59,20 @@ struct CompactTask {
 struct CreateVectorIndexTask {
   CreateVectorIndexTask(const Segment::Ptr &input_segment,
                         const std::string &column_to_build_vector_index,
-                        const IndexParams::Ptr &index_params, int concurrency)
+                        const IndexParams::Ptr &index_params, int concurrency,
+                        std::function<void(uint32_t, uint32_t)> progress_callback = nullptr)
       : input_segment_(input_segment),
         column_to_build_vector_index_(column_to_build_vector_index),
         index_params_(index_params),
-        concurrency_(concurrency) {}
+        concurrency_(concurrency),
+        progress_callback_(std::move(progress_callback)) {}
 
   Segment::Ptr input_segment_;
   std::string column_to_build_vector_index_;  // if empty means create index for
   // all vector columns
   IndexParams::Ptr index_params_;
   int concurrency_;
+  std::function<void(uint32_t, uint32_t)> progress_callback_;
 
   // output
   SegmentMeta::Ptr output_segment_meta_;

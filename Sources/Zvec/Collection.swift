@@ -171,6 +171,35 @@ public class Collection {
             handle, fieldName, metric.cValue, m, efConstruction))
     }
 
+    /// Create an HNSW index on a vector field with progress reporting
+    /// - Parameters:
+    ///   - fieldName: The vector field name
+    ///   - metric: Distance metric type
+    ///   - m: HNSW M parameter (default: 50)
+    ///   - efConstruction: HNSW ef_construction parameter (default: 500)
+    ///   - progress: Callback receiving (currentCount, totalCount)
+    public func createHnswIndex(fieldName: String, metric: MetricType,
+                                 m: Int32 = 50, efConstruction: Int32 = 500,
+                                 progress: @escaping (UInt32, UInt32) -> Void) throws {
+        // Box the closure so we can pass it through a C void* context
+        class ProgressBox {
+            let callback: (UInt32, UInt32) -> Void
+            init(_ callback: @escaping (UInt32, UInt32) -> Void) { self.callback = callback }
+        }
+        let box = ProgressBox(progress)
+        let context = Unmanaged.passRetained(box).toOpaque()
+        defer { Unmanaged<ProgressBox>.fromOpaque(context).release() }
+
+        let cCallback: zvec_progress_callback_t = { current, total, userData in
+            guard let userData = userData else { return }
+            let box = Unmanaged<ProgressBox>.fromOpaque(userData).takeUnretainedValue()
+            box.callback(current, total)
+        }
+
+        try ZvecError.check(zvec_collection_create_hnsw_index_with_progress(
+            handle, fieldName, metric.cValue, m, efConstruction, cCallback, context))
+    }
+
     /// Create a flat (brute-force) index on a vector field
     /// - Parameters:
     ///   - fieldName: The vector field name
