@@ -11,7 +11,7 @@ let package = Package(
         .binaryTarget(
             name: "zvec",
             url: "https://github.com/spullara/zvec/releases/download/v0.2.0-ios/zvec.xcframework.zip",
-            checksum: "8a9601b591db135f9bebb90b2b50bbacc82feeffb43ab8aa77ad1628547ce363"
+            checksum: "6f595ce98563ddc0b6df2a08de780ea04c1203cd331c6ccb235fde6b5a6655b5"
         ),
         .target(
             name: "CZvec",
