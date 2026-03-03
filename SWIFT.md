@@ -12,6 +12,7 @@ Zvec is an embedded vector database for iOS, Mac Catalyst, and macOS. It persist
 6. [Error Handling](#6-error-handling)
 7. [Complete Examples](#7-complete-examples)
 8. [Porting Guide: BFES → Zvec (for RememberWhen)](#8-porting-guide-bfes--zvec-for-rememberwhen)
+9. [Building from Source](#9-building-from-source)
 
 ---
 
@@ -290,6 +291,20 @@ try collection.createHnswIndex(fieldName: "embedding", metric: .cosine)
 
 - `m` — number of connections per node (higher = better recall, more memory). Default: 50.
 - `efConstruction` — construction-time search width (higher = better index quality, slower build). Default: 500.
+
+#### HNSW Index with Progress Reporting
+
+For large collections, use the progress callback to track index build progress:
+
+```swift
+try collection.createHnswIndex(fieldName: "embedding", metric: .cosine) { current, total in
+    DispatchQueue.main.async {
+        self.progress = "Building index… \(current)/\(total)"
+    }
+}
+```
+
+The progress closure receives `(current: UInt32, total: UInt32)` and is called approximately once per second from a background thread. Always dispatch to the main queue for UI updates.
 
 #### Flat Index (brute-force, exact results)
 
@@ -772,3 +787,29 @@ func migrateToZvec() throws {
 - **No "list all documents" API:** There is no method to enumerate all documents. Use `fetch(pks:)` if you know the PKs, or maintain a separate list of PKs if enumeration is needed.
 - **Collection lifecycle:** Hold a strong reference to `Collection` objects (e.g., as a property on your manager class). The collection is closed when the object is deallocated.
 
+---
+
+## 9. Building from Source
+
+If you need to rebuild the XCFramework from source (e.g., after modifying the C++ code), use the included build script:
+
+```bash
+# Full build: all 4 platforms + merge + XCFramework
+./scripts/build-xcframework.sh
+
+# Incremental: skip cmake builds, just re-merge and re-package
+./scripts/build-xcframework.sh --skip-build
+
+# Clean build: remove all build dirs first
+./scripts/build-xcframework.sh --clean
+```
+
+The script builds for iOS, iOS Simulator, Mac Catalyst, and macOS (all arm64), merges the static libraries, and creates the XCFramework at `build-xcframework/zvec.xcframework`.
+
+**Requirements:** Xcode with command-line tools installed, CMake 3.5+.
+
+After rebuilding, verify with:
+
+```bash
+swift package clean && swift test
+```
