@@ -1,12 +1,38 @@
 #!/usr/bin/env bash
-set -euo pipefail
+# Build zvec XCFramework for iOS, iOS Simulator, Mac Catalyst, and macOS.
+# No set -e: we check errors explicitly where they matter.
+set -uo pipefail
 
 cd "$(dirname "$0")/.."
+
+# ── Helpers ──────────────────────────────────────────────────────────────────
+
+GREEN='\033[0;32m'
+RED='\033[0;31m'
+RESET='\033[0m'
+
+ok()  { printf "${GREEN}✅ %s${RESET}\n" "$*"; }
+err() { printf "${RED}❌ %s${RESET}\n" "$*" >&2; }
+
+usage() {
+  cat <<EOF
+Usage: build-xcframework.sh [OPTIONS]
+  --clean         Remove all build dirs before building
+  --skip-build    Skip cmake builds (just merge + package)
+  --verify        Run swift test after building
+  --publish       Publish to GitHub (requires --version)
+  --version=TAG   Release version tag (e.g., v0.3.0-ios)
+  --help          Show this help
+EOF
+}
+
+# ── Parse args ───────────────────────────────────────────────────────────────
 
 NPROC=$(sysctl -n hw.ncpu)
 CLEAN=false
 SKIP_BUILD=false
 PUBLISH=false
+VERIFY=false
 VERSION=""
 
 for arg in "$@"; do
@@ -14,17 +40,26 @@ for arg in "$@"; do
     --clean) CLEAN=true ;;
     --skip-build) SKIP_BUILD=true ;;
     --publish) PUBLISH=true ;;
+    --verify) VERIFY=true ;;
     --version=*) VERSION="${arg#--version=}" ;;
-    *) echo "Unknown option: $arg"; echo "Usage: $0 [--clean] [--skip-build] [--publish] [--version=TAG]"; exit 1 ;;
+    --help) usage; exit 0 ;;
+    *) err "Unknown option: $arg"; usage; exit 1 ;;
   esac
 done
 
 if $PUBLISH && [ -z "$VERSION" ]; then
-  echo "Error: --publish requires --version=TAG (e.g. --version=v0.2.0-ios)"
+  err "--publish requires --version=TAG (e.g. --version=v0.2.0-ios)"
   exit 1
 fi
 
 PLATFORMS=(macos ios iossimulator maccatalyst)
+
+# The 4 curated zvec libs — these are the top-level packed libs that cover
+# all zvec symbols without inter-library overlap. Do NOT glob lib/*.a:
+# component libs (libcore_*.a, libzvec_common.a, etc.) are already packed
+# into libzvec_core.a / libzvec_db.a and would cause duplicate symbols
+# with -all_load.
+ZVEC_LIBS=(libzvec_db.a libzvec_core.a libzvec_ailego.a libzvec_proto.a)
 
 if $CLEAN; then
   echo "=== Cleaning build directories ==="
@@ -48,7 +83,23 @@ build_platform() {
   else
     echo "  (build dir exists, skipping configure)"
   fi
-  cmake --build "$build_dir" -j"$NPROC"
+
+  # cmake --build may fail on dylib targets (missing CoreFoundation for
+  # cross-compiled platforms). That's expected — we only need the .a files.
+  cmake --build "$build_dir" -j"$NPROC" || true
+
+  # Validate that all required static libs were produced
+  local missing=false
+  for lib in "${ZVEC_LIBS[@]}"; do
+    if [ ! -f "${build_dir}/lib/${lib}" ]; then
+      err "${build_dir}/lib/${lib} not found — ${name} build failed"
+      missing=true
+    fi
+  done
+  if $missing; then
+    exit 1
+  fi
+  ok "${name} build complete"
 }
 
 if ! $SKIP_BUILD; then
@@ -70,22 +121,11 @@ merge_libs() {
   echo "=== Merging libs for ${name} ==="
   mkdir -p "$merged_dir"
 
-  # Only use the top-level packed libs that cover all zvec symbols
-  # without inter-library symbol overlap:
-  #   - libzvec_db.a     — includes objects from common, index, sqlengine
-  #   - libzvec_core.a   — independent (knn algorithms, index builders, metrics)
-  #   - libzvec_ailego.a — independent (ailego utilities)
-  #   - libzvec_proto.a  — protobuf generated code (db.a has a stub copy
-  #                        with no symbol defs; proto.a has the real one)
-  # Using all libzvec_*.a would cause duplicate symbols because CMake packs
-  # transitive deps into each target (e.g., libzvec_db.a already contains
-  # all objects from libzvec_common.a, libzvec_index.a, etc.)
-  local zvec_libs=(
-    "${build_dir}/lib/libzvec_db.a"
-    "${build_dir}/lib/libzvec_core.a"
-    "${build_dir}/lib/libzvec_ailego.a"
-    "${build_dir}/lib/libzvec_proto.a"
-  )
+  # Build the curated zvec libs list with full paths
+  local zvec_lib_paths=()
+  for lib in "${ZVEC_LIBS[@]}"; do
+    zvec_lib_paths+=("${build_dir}/lib/${lib}")
+  done
 
   if [ "$name" = "macos" ]; then
     # Strip Thrift SSL objects from arrow bundled deps to avoid OpenSSL
@@ -104,12 +144,16 @@ merge_libs() {
     done
     ext_libs+=("$arrow_clean")
 
-    libtool -static -o "${merged_dir}/libzvec.a" "${zvec_libs[@]}" "${ext_libs[@]}"
+    libtool -static -o "${merged_dir}/libzvec.a" "${zvec_lib_paths[@]}" "${ext_libs[@]}"
   else
-    libtool -static -o "${merged_dir}/libzvec.a" "${zvec_libs[@]}" "${build_dir}"/external/usr/local/lib/*.a
+    libtool -static -o "${merged_dir}/libzvec.a" "${zvec_lib_paths[@]}" "${build_dir}"/external/usr/local/lib/*.a
   fi
 
-  echo "  -> ${merged_dir}/libzvec.a ($(du -h "${merged_dir}/libzvec.a" | cut -f1))"
+  if [ ! -f "${merged_dir}/libzvec.a" ]; then
+    err "Failed to create ${merged_dir}/libzvec.a"
+    exit 1
+  fi
+  ok "${name} merged ($(du -h "${merged_dir}/libzvec.a" | cut -f1))"
 }
 
 for p in "${PLATFORMS[@]}"; do
@@ -128,12 +172,15 @@ xcodebuild -create-xcframework \
   -library build-macos-merged/libzvec.a -headers src/include \
   -output build-xcframework/zvec.xcframework
 
-# ── Verify ────────────────────────────────────────────────────────────────────
+if [ ! -d "build-xcframework/zvec.xcframework" ]; then
+  err "xcodebuild failed to create XCFramework"
+  exit 1
+fi
+
+# ── Summary ──────────────────────────────────────────────────────────────────
 
 echo ""
-echo "=== Verification ==="
-echo ""
-echo "XCFramework contents:"
+echo "=== XCFramework contents ==="
 ls build-xcframework/zvec.xcframework/
 echo ""
 
@@ -144,7 +191,42 @@ for p in "${PLATFORMS[@]}"; do
 done
 
 echo ""
-echo "✅ XCFramework built successfully at build-xcframework/zvec.xcframework"
+ok "XCFramework built at build-xcframework/zvec.xcframework"
+
+# ── Switch Package.swift to local path (unless --publish) ────────────────────
+
+if ! $PUBLISH; then
+  echo ""
+  echo "=== Switching Package.swift to local XCFramework path ==="
+  awk '
+    /\.binaryTarget\(/ { in_bt=1 }
+    in_bt && /\),/ {
+      printf "        .binaryTarget(\n"
+      printf "            name: \"zvec\",\n"
+      printf "            path: \"build-xcframework/zvec.xcframework\"\n"
+      printf "        ),\n"
+      in_bt=0; next
+    }
+    !in_bt { print }
+  ' Package.swift > Package.swift.tmp && mv Package.swift.tmp Package.swift
+  rm -rf .build/artifacts
+  ok "Package.swift set to local path"
+fi
+
+# ── Verify (--verify) ───────────────────────────────────────────────────────
+
+if $VERIFY; then
+  echo ""
+  echo "=== Running swift test ==="
+  rm -rf .build/artifacts
+  swift package clean
+  if swift test 2>&1; then
+    ok "All tests passed"
+  else
+    err "swift test failed"
+    exit 1
+  fi
+fi
 
 # ── Publish ──────────────────────────────────────────────────────────────────
 
@@ -152,19 +234,13 @@ if $PUBLISH; then
   echo ""
   echo "=== Publishing XCFramework as GitHub release ${VERSION} ==="
 
-  # Check prerequisites
-  if [ ! -d "build-xcframework/zvec.xcframework" ]; then
-    echo "Error: build-xcframework/zvec.xcframework does not exist. Build first."
-    exit 1
-  fi
-
   if ! command -v gh &>/dev/null; then
-    echo "Error: gh CLI is not installed. Install from https://cli.github.com/"
+    err "gh CLI is not installed. Install from https://cli.github.com/"
     exit 1
   fi
 
   if ! gh auth status &>/dev/null 2>&1; then
-    echo "Error: gh CLI is not authenticated. Run 'gh auth login' first."
+    err "gh CLI is not authenticated. Run 'gh auth login' first."
     exit 1
   fi
 
@@ -188,7 +264,7 @@ if $PUBLISH; then
     build-xcframework/zvec.xcframework.zip
   echo "  -> release created"
 
-  # Step 4: Update Package.swift
+  # Step 4: Update Package.swift with remote URL
   echo "--- Updating Package.swift ---"
   REPO_URL=$(gh repo view --json url -q .url)
   DOWNLOAD_URL="${REPO_URL}/releases/download/${VERSION}/zvec.xcframework.zip"
@@ -216,7 +292,8 @@ if $PUBLISH; then
   git push
 
   echo ""
-  echo "✅ Published ${VERSION} successfully"
+  ok "Published ${VERSION} successfully"
+  REPO_URL=$(gh repo view --json url -q .url)
   echo "   Release: ${REPO_URL}/releases/tag/${VERSION}"
 fi
 

@@ -854,14 +854,14 @@ If you need to rebuild the XCFramework from source (e.g., after modifying the C+
 
 # Clean build: remove all build dirs first
 ./scripts/build-xcframework.sh --clean
+
+# Build and run tests to verify
+./scripts/build-xcframework.sh --verify
+
+# Show all options
+./scripts/build-xcframework.sh --help
 ```
 
-The script builds for iOS, iOS Simulator, Mac Catalyst, and macOS (all arm64), merges the static libraries, and creates the XCFramework at `build-xcframework/zvec.xcframework`.
+The script builds for iOS, iOS Simulator, Mac Catalyst, and macOS (all arm64), merges the static libraries, and creates the XCFramework at `build-xcframework/zvec.xcframework`. After building, it automatically switches `Package.swift` to use the local XCFramework path.
 
 **Requirements:** Xcode with command-line tools installed, CMake 3.5+.
-
-After rebuilding, verify with:
-
-```bash
-swift package clean && swift test
-```
