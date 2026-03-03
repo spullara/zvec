@@ -6,14 +6,23 @@ cd "$(dirname "$0")/.."
 NPROC=$(sysctl -n hw.ncpu)
 CLEAN=false
 SKIP_BUILD=false
+PUBLISH=false
+VERSION=""
 
 for arg in "$@"; do
   case "$arg" in
     --clean) CLEAN=true ;;
     --skip-build) SKIP_BUILD=true ;;
-    *) echo "Unknown option: $arg"; echo "Usage: $0 [--clean] [--skip-build]"; exit 1 ;;
+    --publish) PUBLISH=true ;;
+    --version=*) VERSION="${arg#--version=}" ;;
+    *) echo "Unknown option: $arg"; echo "Usage: $0 [--clean] [--skip-build] [--publish] [--version=TAG]"; exit 1 ;;
   esac
 done
+
+if $PUBLISH && [ -z "$VERSION" ]; then
+  echo "Error: --publish requires --version=TAG (e.g. --version=v0.2.0-ios)"
+  exit 1
+fi
 
 PLATFORMS=(macos ios iossimulator maccatalyst)
 
@@ -136,4 +145,78 @@ done
 
 echo ""
 echo "✅ XCFramework built successfully at build-xcframework/zvec.xcframework"
+
+# ── Publish ──────────────────────────────────────────────────────────────────
+
+if $PUBLISH; then
+  echo ""
+  echo "=== Publishing XCFramework as GitHub release ${VERSION} ==="
+
+  # Check prerequisites
+  if [ ! -d "build-xcframework/zvec.xcframework" ]; then
+    echo "Error: build-xcframework/zvec.xcframework does not exist. Build first."
+    exit 1
+  fi
+
+  if ! command -v gh &>/dev/null; then
+    echo "Error: gh CLI is not installed. Install from https://cli.github.com/"
+    exit 1
+  fi
+
+  if ! gh auth status &>/dev/null 2>&1; then
+    echo "Error: gh CLI is not authenticated. Run 'gh auth login' first."
+    exit 1
+  fi
+
+  # Step 1: Zip
+  echo "--- Zipping XCFramework ---"
+  (cd build-xcframework && zip -r zvec.xcframework.zip zvec.xcframework)
+  echo "  -> build-xcframework/zvec.xcframework.zip"
+
+  # Step 2: Compute checksum
+  echo "--- Computing checksum ---"
+  CHECKSUM=$(swift package compute-checksum build-xcframework/zvec.xcframework.zip)
+  echo "  -> checksum: ${CHECKSUM}"
+
+  # Step 3: Create GitHub release
+  echo "--- Creating GitHub release ${VERSION} ---"
+  STRIP_V="${VERSION#v}"
+  gh release create "$VERSION" \
+    --title "iOS XCFramework ${STRIP_V}" \
+    --prerelease \
+    --notes "Release ${VERSION}" \
+    build-xcframework/zvec.xcframework.zip
+  echo "  -> release created"
+
+  # Step 4: Update Package.swift
+  echo "--- Updating Package.swift ---"
+  REPO_URL=$(gh repo view --json url -q .url)
+  DOWNLOAD_URL="${REPO_URL}/releases/download/${VERSION}/zvec.xcframework.zip"
+
+  # Replace the binaryTarget block (handles both local path and remote url forms)
+  awk -v url="$DOWNLOAD_URL" -v cs="$CHECKSUM" '
+    /\.binaryTarget\(/ { in_bt=1 }
+    in_bt && /\),/ {
+      printf "        .binaryTarget(\n"
+      printf "            name: \"zvec\",\n"
+      printf "            url: \"%s\",\n", url
+      printf "            checksum: \"%s\"\n", cs
+      printf "        ),\n"
+      in_bt=0; next
+    }
+    !in_bt { print }
+  ' Package.swift > Package.swift.tmp && mv Package.swift.tmp Package.swift
+
+  echo "  -> Package.swift updated"
+
+  # Step 5: Commit and push
+  echo "--- Committing and pushing ---"
+  git add Package.swift
+  git commit -m "chore: publish XCFramework ${VERSION}"
+  git push
+
+  echo ""
+  echo "✅ Published ${VERSION} successfully"
+  echo "   Release: ${REPO_URL}/releases/tag/${VERSION}"
+fi
 
