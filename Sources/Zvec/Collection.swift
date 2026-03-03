@@ -54,6 +54,18 @@ public class Collection {
         try ZvecError.check(zvec_collection_optimize(handle))
     }
 
+    /// Delete documents matching a filter expression.
+    /// - Parameter filter: Boolean expression (e.g., `"age > 30"`)
+    public func deleteByFilter(_ filter: String) throws {
+        try ZvecError.check(zvec_collection_delete_by_filter(handle, filter))
+    }
+
+    /// Permanently delete the collection's data from disk.
+    /// After calling this, the collection is no longer usable.
+    public func destroyData() throws {
+        try ZvecError.check(zvec_collection_destroy_data(handle))
+    }
+
     /// Get the number of documents in the collection
     public func docCount() throws -> UInt64 {
         var count: UInt64 = 0
@@ -207,6 +219,12 @@ public class Collection {
     public func createFlatIndex(fieldName: String, metric: MetricType) throws {
         try ZvecError.check(zvec_collection_create_flat_index(
             handle, fieldName, metric.cValue))
+    }
+
+    /// Drop the index on a field, reverting it to unindexed (or flat for vectors)
+    /// - Parameter fieldName: The field whose index should be removed
+    public func dropIndex(fieldName: String) throws {
+        try ZvecError.check(zvec_collection_drop_index(handle, fieldName))
     }
 }
 

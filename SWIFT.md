@@ -316,6 +316,20 @@ public func createFlatIndex(fieldName: String, metric: MetricType) throws
 try collection.createFlatIndex(fieldName: "embedding", metric: .cosine)
 ```
 
+#### Dropping an Index
+
+```swift
+public func dropIndex(fieldName: String) throws
+```
+
+Remove the index from a field, reverting vector fields to flat (brute-force) search. This is useful when you want to rebuild an index with different parameters.
+
+```swift
+// Drop and rebuild with different parameters
+try collection.dropIndex(fieldName: "embedding")
+try collection.createHnswIndex(fieldName: "embedding", metric: .cosine, m: 32, efConstruction: 200)
+```
+
 ### Collection Lifecycle
 
 A `Collection` is automatically closed and its resources freed when the object is deallocated (via `deinit`). You do not need to call a close method. Hold a strong reference to the `Collection` for as long as you need it.

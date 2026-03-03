@@ -163,6 +163,18 @@ zvec_status_t zvec_collection_optimize(zvec_collection_t col) {
     return from_cpp_status(st);
 }
 
+zvec_status_t zvec_collection_delete_by_filter(zvec_collection_t col, const char* filter) {
+    if (!col || !filter) return make_status(ZVEC_STATUS_INVALID_ARGUMENT, "null argument");
+    auto st = col->collection->DeleteByFilter(std::string(filter));
+    return from_cpp_status(st);
+}
+
+zvec_status_t zvec_collection_destroy_data(zvec_collection_t col) {
+    if (!col) return make_status(ZVEC_STATUS_INVALID_ARGUMENT, "null collection");
+    auto st = col->collection->Destroy();
+    return from_cpp_status(st);
+}
+
 zvec_status_t zvec_collection_doc_count(zvec_collection_t col, uint64_t* out) {
     if (!col || !out) return make_status(ZVEC_STATUS_INVALID_ARGUMENT, "null argument");
     auto result = col->collection->Stats();
@@ -231,12 +243,64 @@ zvec_status_t zvec_doc_set_bool(zvec_doc_t doc, const char* field, bool value) {
     return ok_status();
 }
 
+zvec_status_t zvec_doc_set_uint32(zvec_doc_t doc, const char* field, uint32_t value) {
+    if (!doc || !field) return make_status(ZVEC_STATUS_INVALID_ARGUMENT, "null argument");
+    doc->doc.set<uint32_t>(field, value);
+    return ok_status();
+}
+
+zvec_status_t zvec_doc_set_uint64(zvec_doc_t doc, const char* field, uint64_t value) {
+    if (!doc || !field) return make_status(ZVEC_STATUS_INVALID_ARGUMENT, "null argument");
+    doc->doc.set<uint64_t>(field, value);
+    return ok_status();
+}
+
 zvec_status_t zvec_doc_set_vector_float(zvec_doc_t doc, const char* field,
                                          const float* data, uint32_t dim) {
     if (!doc || !field || !data)
         return make_status(ZVEC_STATUS_INVALID_ARGUMENT, "null argument");
     std::vector<float> vec(data, data + dim);
     doc->doc.set<std::vector<float>>(field, std::move(vec));
+    return ok_status();
+}
+
+zvec_status_t zvec_doc_get_int32(zvec_doc_t doc, const char* field, int32_t* out) {
+    if (!doc || !field || !out)
+        return make_status(ZVEC_STATUS_INVALID_ARGUMENT, "null argument");
+    auto result = doc->doc.get<int32_t>(field);
+    if (!result.has_value())
+        return make_status(ZVEC_STATUS_NOT_FOUND, "field not found");
+    *out = result.value();
+    return ok_status();
+}
+
+zvec_status_t zvec_doc_get_uint32(zvec_doc_t doc, const char* field, uint32_t* out) {
+    if (!doc || !field || !out)
+        return make_status(ZVEC_STATUS_INVALID_ARGUMENT, "null argument");
+    auto result = doc->doc.get<uint32_t>(field);
+    if (!result.has_value())
+        return make_status(ZVEC_STATUS_NOT_FOUND, "field not found");
+    *out = result.value();
+    return ok_status();
+}
+
+zvec_status_t zvec_doc_get_uint64(zvec_doc_t doc, const char* field, uint64_t* out) {
+    if (!doc || !field || !out)
+        return make_status(ZVEC_STATUS_INVALID_ARGUMENT, "null argument");
+    auto result = doc->doc.get<uint64_t>(field);
+    if (!result.has_value())
+        return make_status(ZVEC_STATUS_NOT_FOUND, "field not found");
+    *out = result.value();
+    return ok_status();
+}
+
+zvec_status_t zvec_doc_get_bool(zvec_doc_t doc, const char* field, bool* out) {
+    if (!doc || !field || !out)
+        return make_status(ZVEC_STATUS_INVALID_ARGUMENT, "null argument");
+    auto result = doc->doc.get<bool>(field);
+    if (!result.has_value())
+        return make_status(ZVEC_STATUS_NOT_FOUND, "field not found");
+    *out = result.value();
     return ok_status();
 }
 
@@ -468,6 +532,14 @@ zvec_status_t zvec_collection_create_flat_index(zvec_collection_t col,
         return make_status(ZVEC_STATUS_INVALID_ARGUMENT, "null argument");
     auto params = std::make_shared<zvec::FlatIndexParams>(to_cpp_metric_type(metric));
     auto st = col->collection->CreateIndex(field_name, params);
+    return from_cpp_status(st);
+}
+
+zvec_status_t zvec_collection_drop_index(zvec_collection_t col,
+                                          const char* field_name) {
+    if (!col || !field_name)
+        return make_status(ZVEC_STATUS_INVALID_ARGUMENT, "null argument");
+    auto st = col->collection->DropIndex(field_name);
     return from_cpp_status(st);
 }
 

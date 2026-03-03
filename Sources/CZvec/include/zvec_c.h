@@ -94,6 +94,8 @@ zvec_status_t zvec_collection_open(const char* path, bool read_only,
 void zvec_collection_destroy(zvec_collection_t col);
 zvec_status_t zvec_collection_flush(zvec_collection_t col);
 zvec_status_t zvec_collection_optimize(zvec_collection_t col);
+zvec_status_t zvec_collection_delete_by_filter(zvec_collection_t col, const char* filter);
+zvec_status_t zvec_collection_destroy_data(zvec_collection_t col);
 zvec_status_t zvec_collection_doc_count(zvec_collection_t col, uint64_t* out);
 
 // --- Doc ---
@@ -112,11 +114,19 @@ zvec_status_t zvec_doc_set_bool(zvec_doc_t doc, const char* field, bool value);
 zvec_status_t zvec_doc_set_vector_float(zvec_doc_t doc, const char* field,
                                          const float* data, uint32_t dim);
 
+// Doc field setters (unsigned)
+zvec_status_t zvec_doc_set_uint32(zvec_doc_t doc, const char* field, uint32_t value);
+zvec_status_t zvec_doc_set_uint64(zvec_doc_t doc, const char* field, uint64_t value);
+
 // Doc field getters
 zvec_status_t zvec_doc_get_string(zvec_doc_t doc, const char* field, const char** out);
+zvec_status_t zvec_doc_get_int32(zvec_doc_t doc, const char* field, int32_t* out);
 zvec_status_t zvec_doc_get_int64(zvec_doc_t doc, const char* field, int64_t* out);
+zvec_status_t zvec_doc_get_uint32(zvec_doc_t doc, const char* field, uint32_t* out);
+zvec_status_t zvec_doc_get_uint64(zvec_doc_t doc, const char* field, uint64_t* out);
 zvec_status_t zvec_doc_get_float(zvec_doc_t doc, const char* field, float* out);
 zvec_status_t zvec_doc_get_double(zvec_doc_t doc, const char* field, double* out);
+zvec_status_t zvec_doc_get_bool(zvec_doc_t doc, const char* field, bool* out);
 zvec_status_t zvec_doc_get_vector_float(zvec_doc_t doc, const char* field,
                                          const float** out, uint32_t* dim_out);
 
@@ -158,6 +168,9 @@ zvec_status_t zvec_collection_create_hnsw_index_with_progress(
 zvec_status_t zvec_collection_create_flat_index(zvec_collection_t col,
                                                  const char* field_name,
                                                  zvec_metric_type_t metric);
+
+zvec_status_t zvec_collection_drop_index(zvec_collection_t col,
+                                          const char* field_name);
 
 // --- Utility ---
 void zvec_free_doc_array(zvec_doc_t* docs, int count);
