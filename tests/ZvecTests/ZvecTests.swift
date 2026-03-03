@@ -981,4 +981,63 @@ final class ZvecTests: XCTestCase {
             }
         }
     }
+
+    // MARK: - Test 15: Drop and rebuild HNSW index with progress callback
+
+    func testDropAndRebuildHnswIndexWithProgress() throws {
+        let path = Self.tempDir + "/test_drop_rebuild_hnsw"
+        let schema = CollectionSchema(name: "test_rebuild")
+        try schema
+            .addVectorField("embedding", dataType: .vectorFP32, dimension: 512, metric: .cosine)
+            .addField("title", dataType: .string)
+        let collection = try Collection.createAndOpen(path: path, schema: schema)
+
+        // Insert enough docs to make progress meaningful
+        let docCount = 500
+        for i in 0..<docCount {
+            let doc = Doc(pk: "doc-\(i)")
+            try doc.set("embedding", vector: randomVector(dim: 512))
+            try doc.set("title", string: "Document \(i)")
+            try collection.upsert([doc])
+        }
+        try collection.flush()
+
+        // Build initial HNSW index (no progress)
+        try collection.createHnswIndex(fieldName: "embedding", metric: .cosine)
+
+        // Verify search works with the index
+        let results1 = try collection.query(fieldName: "embedding", vector: randomVector(dim: 512), topk: 5)
+        XCTAssertEqual(results1.count, 5, "Should get 5 results with initial index")
+
+        // Drop the index
+        try collection.dropIndex(fieldName: "embedding")
+
+        // Rebuild with progress callback
+        var progressCalls: [(UInt32, UInt32)] = []
+        let progressLock = NSLock()
+
+        try collection.createHnswIndex(fieldName: "embedding", metric: .cosine) { current, total in
+            progressLock.lock()
+            progressCalls.append((current, total))
+            progressLock.unlock()
+        }
+
+        // Verify progress was actually reported
+        XCTAssertGreaterThan(progressCalls.count, 0, "Progress callback should have been called at least once")
+
+        // Verify total matches doc count
+        if let lastCall = progressCalls.last {
+            XCTAssertEqual(lastCall.0, lastCall.1, "Final progress should show current == total")
+            XCTAssertEqual(Int(lastCall.1), docCount, "Total should match document count")
+        }
+
+        // Verify search still works after rebuild
+        let results2 = try collection.query(fieldName: "embedding", vector: randomVector(dim: 512), topk: 5)
+        XCTAssertEqual(results2.count, 5, "Should get 5 results after rebuild")
+
+        print("Progress callback was called \(progressCalls.count) times")
+        if let first = progressCalls.first, let last = progressCalls.last {
+            print("First: \(first.0)/\(first.1), Last: \(last.0)/\(last.1)")
+        }
+    }
 }

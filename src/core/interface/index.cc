@@ -17,6 +17,7 @@
 #include <zvec/core/framework/index_storage.h>
 #include <zvec/core/interface/index.h>
 #include "mixed_reducer/mixed_reducer_params.h"
+#include "mixed_reducer/mixed_streamer_reducer.h"
 
 namespace zvec::core_interface {
 
@@ -777,6 +778,20 @@ int Index::Merge(const std::vector<Index::Pointer> &indexes,
   }
   if (options.progress_callback && builder_) {
     builder_->set_progress_callback(options.progress_callback);
+  }
+
+  // For streamer-based merge (no builder, e.g. HNSW), set progress on reducer
+  if (options.progress_callback && !builder_) {
+    uint32_t total_docs = 0;
+    for (const auto &index : indexes) {
+      total_docs += index->GetDocCount();
+    }
+    auto mixed_reducer =
+        std::dynamic_pointer_cast<core::MixedStreamerReducer>(reducer);
+    if (mixed_reducer) {
+      mixed_reducer->set_progress_callback(options.progress_callback,
+                                           total_docs);
+    }
   }
 
   for (const auto &index : indexes) {

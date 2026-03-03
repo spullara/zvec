@@ -47,8 +47,14 @@ int MixedStreamerReducer::cleanup(void) {
   streamers_.clear();
   target_streamer_->cleanup();
 
-  target_builder_->cleanup();
+  if (target_builder_) {
+    target_builder_->cleanup();
+  }
   doc_cache_.clear();
+
+  progress_callback_ = nullptr;
+  progress_total_ = 0;
+  progress_counter_.store(0);
 
   stats_.clear_attributes();
   state_ = STATE_UNINITED;
@@ -336,6 +342,12 @@ void MixedStreamerReducer::add_vec(int *result) {
                 ret, IndexError::What(ret), (size_t)vector_item.pkey_);
       *result = ret;
       return;
+    }
+
+    // Invoke progress callback for streamer-based merge (no builder)
+    if (progress_callback_ && progress_total_ > 0) {
+      uint32_t current = progress_counter_.fetch_add(1) + 1;
+      progress_callback_(current, progress_total_);
     }
   }
 

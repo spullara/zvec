@@ -13,6 +13,8 @@
 // limitations under the License.
 #pragma once
 
+#include <atomic>
+#include <functional>
 #include <vector>
 #include <ailego/parallel/lock.h>
 #include <ailego/parallel/multi_thread_list.h>
@@ -108,6 +110,19 @@ class MixedStreamerReducer : public IndexStreamerReducer {
   std::mutex mutex_{};
   std::vector<std::pair<uint64_t, std::string>> doc_cache_;
   const uint64_t kInvalidKey = std::numeric_limits<uint64_t>::max();
+
+  // Progress callback for streamer-based merge (when builder_ is null)
+  std::function<void(uint32_t, uint32_t)> progress_callback_;
+  uint32_t progress_total_{0};
+  std::atomic<uint32_t> progress_counter_{0};
+
+ public:
+  void set_progress_callback(std::function<void(uint32_t, uint32_t)> callback,
+                             uint32_t total) {
+    progress_callback_ = std::move(callback);
+    progress_total_ = total;
+    progress_counter_.store(0);
+  }
 };
 
 }  // namespace core
