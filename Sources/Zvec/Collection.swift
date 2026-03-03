@@ -177,7 +177,7 @@ public class Collection {
     ///   - metric: Distance metric type
     ///   - m: HNSW M parameter (default: 50)
     ///   - efConstruction: HNSW ef_construction parameter (default: 500)
-    ///   - progress: Callback receiving (currentCount, totalCount)
+    ///   - progress: Callback receiving (currentCount, totalCount). Called from a background thread — dispatch to main queue for UI updates.
     public func createHnswIndex(fieldName: String, metric: MetricType,
                                  m: Int32 = 50, efConstruction: Int32 = 500,
                                  progress: @escaping (UInt32, UInt32) -> Void) throws {
