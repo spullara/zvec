@@ -559,10 +559,12 @@ macro(_add_library _NAME _OPTION)
   add_library(
       ${_NAME}_static STATIC ${_OPTION} $<TARGET_OBJECTS:${_NAME}_objects>
     )
-  add_library(
-      ${_NAME} SHARED ${_OPTION} $<TARGET_OBJECTS:${_NAME}_objects>
-    )
-  add_dependencies(${_NAME} ${_NAME}_static)
+  if(BUILD_SHARED_LIBS)
+    add_library(
+        ${_NAME} SHARED ${_OPTION} $<TARGET_OBJECTS:${_NAME}_objects>
+      )
+    add_dependencies(${_NAME} ${_NAME}_static)
+  endif()
   if(NOT MSVC)
     set_property(TARGET ${_NAME}_static PROPERTY OUTPUT_NAME ${_NAME})
   endif()
@@ -900,25 +902,29 @@ function(cc_library)
     endif()
   endif()
 
-  _cc_target_properties(
-      NAME "${CC_ARGS_NAME}"
-      INCS "${CC_ARGS_INCS}"
-      PUBINCS "${CC_ARGS_PUBINCS}"
-      DEFS "${CC_ARGS_DEFS}"
-      LIBS "${CC_ARGS_LIBS}"
-      CFLAGS "${CC_ARGS_CFLAGS}"
-      CXXFLAGS "${CC_ARGS_CXXFLAGS}"
-      LDFLAGS "${CC_ARGS_LDFLAGS}"
-      DEPS "${CC_ARGS_DEPS}"
-      VERSION "${CC_ARGS_VERSION}"
-      "${CC_ARGS_UNPARSED_ARGUMENTS}"
-  )
-  if(CC_ARGS_PACKED)
-    install(
-        TARGETS ${CC_ARGS_NAME}
-        ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
-        LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+  if(TARGET ${CC_ARGS_NAME})
+    _cc_target_properties(
+        NAME "${CC_ARGS_NAME}"
+        INCS "${CC_ARGS_INCS}"
+        PUBINCS "${CC_ARGS_PUBINCS}"
+        DEFS "${CC_ARGS_DEFS}"
+        LIBS "${CC_ARGS_LIBS}"
+        CFLAGS "${CC_ARGS_CFLAGS}"
+        CXXFLAGS "${CC_ARGS_CXXFLAGS}"
+        LDFLAGS "${CC_ARGS_LDFLAGS}"
+        DEPS "${CC_ARGS_DEPS}"
+        VERSION "${CC_ARGS_VERSION}"
+        "${CC_ARGS_UNPARSED_ARGUMENTS}"
     )
+  endif()
+  if(CC_ARGS_PACKED)
+    if(TARGET ${CC_ARGS_NAME})
+      install(
+          TARGETS ${CC_ARGS_NAME}
+          ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+          LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+      )
+    endif()
     if(CC_ARGS_PUBINCS)
       foreach(PACKED_EXCLUDE ${CC_ARGS_PACKED_EXCLUDES})
         list(APPEND PATTERN_EXCLUDES "PATTERN;${PACKED_EXCLUDE};EXCLUDE")
