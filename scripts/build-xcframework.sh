@@ -84,8 +84,6 @@ build_platform() {
     echo "  (build dir exists, skipping configure)"
   fi
 
-  # cmake --build may fail on dylib targets (missing CoreFoundation for
-  # cross-compiled platforms). That's expected — we only need the .a files.
   cmake --build "$build_dir" -j"$NPROC" || true
 
   # Validate that all required static libs were produced
@@ -104,9 +102,17 @@ build_platform() {
 
 if ! $SKIP_BUILD; then
   build_platform macos "-DBUILD_TOOLS=OFF"
-  build_platform ios "-DCMAKE_TOOLCHAIN_FILE=cmake/ios.toolchain.cmake"
-  build_platform iossimulator "-DCMAKE_TOOLCHAIN_FILE=cmake/iossimulator.toolchain.cmake"
-  build_platform maccatalyst "-DCMAKE_TOOLCHAIN_FILE=cmake/maccatalyst.toolchain.cmake"
+
+  # Cross-compilation targets need a host protoc binary (built by macOS target above)
+  HOST_PROTOC="$(pwd)/build-macos/bin/protoc"
+  if [ ! -f "$HOST_PROTOC" ]; then
+    err "Host protoc not found at ${HOST_PROTOC} — macOS build must succeed first"
+    exit 1
+  fi
+
+  build_platform ios "-DCMAKE_TOOLCHAIN_FILE=cmake/ios.toolchain.cmake -DBUILD_SHARED_LIBS=OFF -DPROTOBUF_HOST_PROTOC=${HOST_PROTOC}"
+  build_platform iossimulator "-DCMAKE_TOOLCHAIN_FILE=cmake/iossimulator.toolchain.cmake -DBUILD_SHARED_LIBS=OFF -DPROTOBUF_HOST_PROTOC=${HOST_PROTOC}"
+  build_platform maccatalyst "-DCMAKE_TOOLCHAIN_FILE=cmake/maccatalyst.toolchain.cmake -DBUILD_SHARED_LIBS=OFF -DPROTOBUF_HOST_PROTOC=${HOST_PROTOC}"
 else
   echo "=== Skipping builds (--skip-build) ==="
 fi
