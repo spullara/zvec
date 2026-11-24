@@ -7,12 +7,46 @@ cd "$(dirname "$0")/.."
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
+SCRIPT_START=$SECONDS
+
+BLUE='\033[0;34m'
 GREEN='\033[0;32m'
 RED='\033[0;31m'
 RESET='\033[0m'
 
 ok()  { printf "${GREEN}✅ %s${RESET}\n" "$*"; }
 err() { printf "${RED}❌ %s${RESET}\n" "$*" >&2; }
+
+phase_var_name() {
+  local name="$1"
+  name="${name//[^[:alnum:]]/_}"
+  printf 'PHASE_START_%s' "$name"
+}
+
+phase_start() {
+  local name="$1"
+  local phase_var
+  phase_var="$(phase_var_name "$name")"
+  printf -v "$phase_var" '%s' "$SECONDS"
+  printf "\n${BLUE}▶ %s${RESET}\n" "$name"
+}
+
+phase_end() {
+  local name="$1"
+  local phase_var start elapsed
+  phase_var="$(phase_var_name "$name")"
+  start="${!phase_var:-$SECONDS}"
+  elapsed=$((SECONDS - start))
+  ok "${name} (${elapsed}s)"
+  unset "$phase_var"
+}
+
+format_duration() {
+  local total_seconds="$1"
+  local minutes=$((total_seconds / 60))
+  local seconds=$((total_seconds % 60))
+  printf '%sm %ss' "$minutes" "$seconds"
+}
 
 usage() {
   cat <<EOF
@@ -62,11 +96,12 @@ PLATFORMS=(macos ios iossimulator maccatalyst)
 ZVEC_LIBS=(libzvec_db.a libzvec_core.a libzvec_ailego.a libzvec_proto.a)
 
 if $CLEAN; then
-  echo "=== Cleaning build directories ==="
+  phase_start "Clean"
   for p in "${PLATFORMS[@]}"; do
     rm -rf "build-${p}" "build-${p}-merged"
   done
   rm -rf build-xcframework
+  phase_end "Clean"
 fi
 
 # ── Build all platforms ──────────────────────────────────────────────────────
@@ -74,8 +109,9 @@ fi
 build_platform() {
   local name="$1" extra_args="$2"
   local build_dir="build-${name}"
+  local phase_name="Build ${name} arm64"
 
-  echo "=== Building ${name} arm64 ==="
+  phase_start "$phase_name"
   if [ ! -d "$build_dir" ]; then
     cmake -B "$build_dir" $extra_args \
       -DCMAKE_BUILD_TYPE=Release \
@@ -97,10 +133,11 @@ build_platform() {
   if $missing; then
     exit 1
   fi
-  ok "${name} build complete"
+  phase_end "$phase_name"
 }
 
 if ! $SKIP_BUILD; then
+  phase_start "Build all platforms"
   build_platform macos "-DBUILD_TOOLS=OFF"
 
   # Cross-compilation targets need a host protoc binary (built by macOS target above)
@@ -113,6 +150,7 @@ if ! $SKIP_BUILD; then
   build_platform ios "-DCMAKE_TOOLCHAIN_FILE=cmake/ios.toolchain.cmake -DBUILD_SHARED_LIBS=OFF -DPROTOBUF_HOST_PROTOC=${HOST_PROTOC}"
   build_platform iossimulator "-DCMAKE_TOOLCHAIN_FILE=cmake/iossimulator.toolchain.cmake -DBUILD_SHARED_LIBS=OFF -DPROTOBUF_HOST_PROTOC=${HOST_PROTOC}"
   build_platform maccatalyst "-DCMAKE_TOOLCHAIN_FILE=cmake/maccatalyst.toolchain.cmake -DBUILD_SHARED_LIBS=OFF -DPROTOBUF_HOST_PROTOC=${HOST_PROTOC}"
+  phase_end "Build all platforms"
 else
   echo "=== Skipping builds (--skip-build) ==="
 fi
@@ -123,8 +161,9 @@ merge_libs() {
   local name="$1"
   local build_dir="build-${name}"
   local merged_dir="build-${name}-merged"
+  local phase_name="Merge ${name} libs"
 
-  echo "=== Merging libs for ${name} ==="
+  phase_start "$phase_name"
   mkdir -p "$merged_dir"
 
   # Build the curated zvec libs list with full paths
@@ -159,16 +198,19 @@ merge_libs() {
     err "Failed to create ${merged_dir}/libzvec.a"
     exit 1
   fi
-  ok "${name} merged ($(du -h "${merged_dir}/libzvec.a" | cut -f1))"
+  echo "  -> merged size: $(du -h "${merged_dir}/libzvec.a" | cut -f1)"
+  phase_end "$phase_name"
 }
 
+phase_start "Merge static libs"
 for p in "${PLATFORMS[@]}"; do
   merge_libs "$p"
 done
+phase_end "Merge static libs"
 
 # ── Create XCFramework ───────────────────────────────────────────────────────
 
-echo "=== Creating XCFramework ==="
+phase_start "Create XCFramework"
 rm -rf build-xcframework
 
 xcodebuild -create-xcframework \
@@ -182,6 +224,7 @@ if [ ! -d "build-xcframework/zvec.xcframework" ]; then
   err "xcodebuild failed to create XCFramework"
   exit 1
 fi
+phase_end "Create XCFramework"
 
 # ── Summary ──────────────────────────────────────────────────────────────────
 
@@ -222,12 +265,11 @@ fi
 # ── Verify (--verify) ───────────────────────────────────────────────────────
 
 if $VERIFY; then
-  echo ""
-  echo "=== Running swift test ==="
+  phase_start "Verify"
   rm -rf .build/artifacts
   swift package clean
   if swift test 2>&1; then
-    ok "All tests passed"
+    phase_end "Verify"
   else
     err "swift test failed"
     exit 1
@@ -237,8 +279,7 @@ fi
 # ── Publish ──────────────────────────────────────────────────────────────────
 
 if $PUBLISH; then
-  echo ""
-  echo "=== Publishing XCFramework as GitHub release ${VERSION} ==="
+  phase_start "Publish"
 
   if ! command -v gh &>/dev/null; then
     err "gh CLI is not installed. Install from https://cli.github.com/"
@@ -298,8 +339,11 @@ if $PUBLISH; then
   git push
 
   echo ""
-  ok "Published ${VERSION} successfully"
+  phase_end "Publish"
   REPO_URL=$(gh repo view --json url -q .url)
   echo "   Release: ${REPO_URL}/releases/tag/${VERSION}"
 fi
+
+echo ""
+ok "Total time: $(format_duration $((SECONDS - SCRIPT_START)))"
 
